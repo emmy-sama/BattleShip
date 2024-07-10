@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <time.h>
 
 #define BOARD_SIZE 10
 #define NUM_SHIPS_PER_PLAYER 5
@@ -160,6 +161,16 @@ void get_user_input(Player* player, int* x, int* y, char* direction, int ship_si
     } while (1);
 }
 
+void ai_placement(Player* player, int* x, int* y, char* direction, int ship_size) {
+    srand(time(0));
+
+    do {
+        *x = rand() % BOARD_SIZE;
+        *y = rand() % BOARD_SIZE;
+        *direction = rand() % 2 == 0 ? 'H' : 'V';
+    } while (!validate_placement(player, *x, *y, *direction, ship_size));
+}
+
 int main() {
     Player player1;
     Player player2;
@@ -180,7 +191,7 @@ int main() {
     for (int i = 0; i < NUM_SHIPS_PER_PLAYER; i++) {
         int x, y;
         char direction;
-        get_user_input(&player2, &x, &y, &direction, ship_sizes[i]);
+        ai_placement(&player2, &x, &y, &direction, ship_sizes[i]);
         place_ship(&player2, x, y, direction, ship_sizes[i], ship_chars[i]);
     }
     
