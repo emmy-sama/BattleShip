@@ -22,6 +22,7 @@ typedef struct {
     bool hasBoat;
     bool isHit;
     char shipType;
+    bool isSunk;
 } Tile;
 
 typedef struct {
@@ -43,6 +44,7 @@ void inititalize_board(Tile board[BOARD_SIZE][BOARD_SIZE]) {
             board[i][j].hasBoat = false;
             board[i][j].isHit = false;
             board[i][j].shipType = '\0';
+            board[i][j].isSunk = false;
         }
     }
 }
@@ -199,6 +201,8 @@ void ai_placement(Player* player, int* x, int* y, char* direction, int ship_size
 }
 
 void do_shot(Player* player, int x, int y) {
+    printf("Shooting at %c%d...\n", x + 'A', y);
+
     if (player->board[x][y].hasBoat) {
         printf("Hit!\n");
     } else {
@@ -223,12 +227,129 @@ void get_user_shot(Player* player) {
     } while (1);
 }
 
-void get_ai_shot(Player* player) {
-    srand(time(0));
-    int x, y;
-    x = rand() % BOARD_SIZE;
-    y = rand() % BOARD_SIZE;
+void check_for_found_ships(Player* player, int* x, int* y) {
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            if (player->board[i][j].hasBoat && player->board[i][j].isHit && !player->board[i][j].isSunk) {
+                *x = i;
+                *y = j;
+                return;
+            }
+        }
+    }
+    *x = *y = -1;
+}
 
+int check_ship_direction(Player* player, int x, int y) {
+    if (x == 9) {
+        if (player->board[x - 1][y].hasBoat && player->board[x - 1][y].isHit) {
+            return 'V';
+        }
+    }
+    else if (x == 0) {
+        if (player->board[x + 1][y].hasBoat && player->board[x + 1][y].isHit) {
+            return 'V';
+        }
+    }
+    else {
+        if (player->board[x + 1][y].hasBoat && player->board[x + 1][y].isHit || player->board[x - 1][y].hasBoat && player->board[x - 1][y].isHit) {
+            return 'V';
+        }
+    }
+    
+    if (y == 9) {
+        if (player->board[x][y - 1].hasBoat && player->board[x][y - 1].isHit) {
+            return 'H';
+        }
+    }
+    else if (y == 0) {
+        if (player->board[x][y + 1].hasBoat && player->board[x][y + 1].isHit) {
+            return 'H';
+        }
+    }
+    else {
+        if (player->board[x][y + 1].hasBoat && player->board[x][y + 1].isHit || player->board[x][y - 1].hasBoat && player->board[x][y - 1].isHit) {
+        return 'H';
+        }
+    }
+}
+
+void get_ai_shot(Player* player) {
+    // Check if there are any found ships
+    int x, y;
+    check_for_found_ships(player, &x, &y);
+
+    // If there is a found ship
+    if (x != -1 && y != -1) {
+        switch (check_ship_direction(player, x, y)) {
+        case 'V':
+            for (int i = 1; (x + i) <= 9; i++) {
+                if (player->board[x + i][y].isHit && !player->board[x + i][y].hasBoat) {
+                    break;
+                }
+                else if (!player->board[x + i][y].isHit) {
+                    do_shot(player, x + i, y);
+                    return;
+                }
+            }
+            for (int i = 1; (x - i) >= 0; i++) {
+                if (player->board[x - i][y].isHit && !player->board[x - i][y].hasBoat) {
+                    break;
+                }
+                else if (!player->board[x - i][y].isHit) {
+                    do_shot(player, x - i, y);
+                    return;
+                }
+            }
+            break;
+        case 'H':
+            for (int i = 1; (i + y) <= 9; i++) {
+                if (player->board[x][y + i].isHit && !player->board[x][y + i].hasBoat) {
+                    break;
+                }
+                else if (!player->board[x][y + i].isHit) {
+                    do_shot(player, x, y + i);
+                    return;
+                }
+            }
+            for (int i = 1; (y - i) >= 0; i++) {
+                if (player->board[x][y - i].isHit && !player->board[x][y - i].hasBoat) {
+                    break;
+                }
+                else if (!player->board[x][y - i].isHit) {
+                    do_shot(player, x, y - i);
+                    return;
+                }
+            }
+            break;
+        default:
+            if (x < 9 && !player->board[x + 1][y].isHit) {
+                do_shot(player, x + 1, y);
+                return;
+            }
+            if (x > 0 && !player->board[x - 1][y].isHit) {
+                do_shot(player, x - 1, y);
+                return;
+            }
+            if (y < 9 && !player->board[x][y + 1].isHit) {
+                do_shot(player, x, y + 1);
+                return;
+            }
+            if (y > 0 && !player->board[x][y - 1].isHit) {
+                do_shot(player, x, y - 1);
+                return;
+            }
+            break;
+        }
+    }
+
+    // If there are no found ships, fire randomly
+    do {
+        srand(time(0));
+        x = rand() % BOARD_SIZE;
+        y = rand() % BOARD_SIZE;    
+    } 
+    while (player->board[x][y].isHit);
     do_shot(player, x, y);
 }
 
@@ -246,8 +367,11 @@ bool check_game_over(Player* player) {
 int check_if_ships_sunk(Player* player) {
     for (int i = 0; i < NUM_SHIPS_PER_PLAYER; i++) {
         for (int j = 0; j < ship_sizes[i]; j++) {
-            if (!player->ships[i].tiles[j]->isHit) {
+            if (!player->ships[i].tiles[j]->isHit || player->ships[i].tiles[j]->isSunk) {
                 break;
+            }
+            for (int k = 0; k < ship_sizes[i]; k++) {
+                player->ships[i].tiles[k]->isSunk = true;
             }
             return i;
         }
@@ -270,7 +394,7 @@ int main() {
         char direction;
         get_user_input(&player1, &x, &y, &direction, ship_sizes[i]);
         place_ship(&player1, x, y, direction, i);
-        system("cls");
+        // system("cls");
     }
 
     for (int i = 0; i < NUM_SHIPS_PER_PLAYER; i++) {
@@ -285,7 +409,7 @@ int main() {
         // Player 1's turn
         print_board(player1.board, player2.board);
         get_user_shot(&player2);
-        system("cls");
+        // system("cls");
         int sunk_ship = check_if_ships_sunk(&player2);
         if (sunk_ship != -1) {
             printf("Ship %c sunk!\n", ship_chars[sunk_ship]);
